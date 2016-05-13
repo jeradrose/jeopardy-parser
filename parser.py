@@ -34,11 +34,6 @@ def main(args):
                 number INTEGER,
                 airdate TEXT
             );""")
-            sql.execute("""CREATE TABLE documents(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                clue TEXT,
-                answer TEXT
-            );""")
             sql.execute("""CREATE TABLE categories(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 category TEXT UNIQUE
@@ -48,13 +43,10 @@ def main(args):
                 game_id INTEGER,
                 round INTEGER,
                 value INTEGER,
-                FOREIGN KEY(id) REFERENCES documents(id),
-                FOREIGN KEY(game_id) REFERENCES games(id)
-            );""")
-            sql.execute("""CREATE TABLE classifications(
-                clue_id INTEGER,
                 category_id INTEGER,
-                FOREIGN KEY(clue_id) REFERENCES clues(id),
+                clue TEXT,
+                answer TEXT,
+                FOREIGN KEY(game_id) REFERENCES games(id),
                 FOREIGN KEY(category_id) REFERENCES categories(id)
             );""")
         for i, file_name in enumerate(glob(os.path.join(args.dir, "*.html")), 1):
@@ -140,9 +132,7 @@ def insert(sql, clue):
     )
     sql.execute("INSERT OR IGNORE INTO categories(category) VALUES(?);", (clue[3], ))
     category_id = sql.execute("SELECT id FROM categories WHERE category=?;", (clue[3], )).fetchone()[0]
-    clue_id = sql.execute("INSERT INTO documents(clue, answer) VALUES(?, ?);", (clue[5], clue[6], )).lastrowid
-    sql.execute("INSERT INTO clues(game_id, round, value) VALUES(?, ?, ?);", (clue[0], clue[2], clue[4], ))
-    sql.execute("INSERT INTO classifications VALUES(?, ?)", (clue_id, category_id, ))
+    sql.execute("INSERT INTO clues(game_id, round, value, category_id, clue, answer) VALUES(?, ?, ?, ?, ?, ?);", (clue[0], clue[2], clue[4], category_id, clue[5], clue[6], ))
 
 
 if __name__ == "__main__":
