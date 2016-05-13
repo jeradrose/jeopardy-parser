@@ -22,12 +22,12 @@ def main(args):
         NUMBER_OF_FILES = args.num_of_files
     print("Parsing", NUMBER_OF_FILES, "files")
     sql = None
-    try:
-        os.remove(args.database)
-    except OSError:
-        pass
     with sqlite3.connect(args.database) as sql:
         if not args.stdout:
+            sql.execute("""PRAGMA writable_schema = 1;""")
+            sql.execute("""DELETE FROM sqlite_master WHERE type IN ('table', 'index', 'trigger')""")
+            sql.execute("""PRAGMA writable_schema = 0;""")
+            sql.execute("""VACUUM;""")
             sql.execute("""PRAGMA foreign_keys = ON;""")
             sql.execute("""CREATE TABLE games(
                 id INTEGER PRIMARY KEY,
