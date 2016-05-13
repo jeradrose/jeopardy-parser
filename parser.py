@@ -25,8 +25,9 @@ def main(args):
     if not args.stdout:
         sql = sqlite3.connect(args.database)
         sql.execute("""PRAGMA foreign_keys = ON;""")
-        sql.execute("""CREATE TABLE airdates(
-            game INTEGER PRIMARY KEY,
+        sql.execute("""CREATE TABLE games(
+            id INTEGER PRIMARY KEY,
+            number INTEGER,
             airdate TEXT
         );""")
         sql.execute("""CREATE TABLE documents(
@@ -40,11 +41,11 @@ def main(args):
         );""")
         sql.execute("""CREATE TABLE clues(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            game INTEGER,
+            game_id INTEGER,
             round INTEGER,
             value INTEGER,
             FOREIGN KEY(id) REFERENCES documents(id),
-            FOREIGN KEY(game) REFERENCES airdates(game)
+            FOREIGN KEY(game_id) REFERENCES games(id)
         );""")
         sql.execute("""CREATE TABLE classifications(
             clue_id INTEGER,
@@ -65,8 +66,10 @@ def parse_game(f, sql, gid):
     bsoup = BeautifulSoup(f, "lxml")
     # The title is in the format: `J! Archive - Show #XXXX, aired 2004-09-16`,
     # where the last part is all that is required
-    airdate = bsoup.title.get_text().split()[-1]
-    if not parse_round(bsoup, sql, 1, gid, airdate) or not parse_round(bsoup, sql, 2, gid, airdate):
+    title_parts = bsoup.title.get_text().split()
+    airdate = title_parts[-1]
+    game_number = title_parts[-3].replace("#", "").replace(",", "")
+    if not parse_round(bsoup, sql, 1, gid, game_number, airdate) or not parse_round(bsoup, sql, 2, gid, game_number, airdate):
         # One of the rounds does not exist
         pass
     # The final Jeopardy! round
@@ -79,10 +82,10 @@ def parse_game(f, sql, gid):
     answer = BeautifulSoup(r.find("div", onmouseover=True).get("onmouseover"), "lxml")
     answer = answer.find("em").get_text()
     # False indicates no preset value for a clue
-    insert(sql, [gid, airdate, 3, category, False, text, answer])
+    insert(sql, [gid, airdate, 3, category, False, text, answer, game_number])
 
 
-def parse_round(bsoup, sql, rnd, gid, airdate):
+def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
     """Parses and inserts the list of clues from a whole round."""
     round_id = "jeopardy_round" if rnd == 1 else "double_jeopardy_round"
     r = bsoup.find(id=round_id)
@@ -102,7 +105,7 @@ def parse_round(bsoup, sql, rnd, gid, airdate):
             text = a.find("td", class_="clue_text").get_text()
             answer = BeautifulSoup(a.find("div", onmouseover=True).get("onmouseover"), "lxml")
             answer = answer.find("em", class_="correct_response").get_text()
-            insert(sql, [gid, airdate, rnd, categories[x], value, text, answer])
+            insert(sql, [gid, airdate, rnd, categories[x], value, text, answer, game_number])
         # Always update x, even if we skip
         # a clue, as this keeps things in order. there
         # are 6 categories, so once we reach the end,
@@ -129,13 +132,13 @@ def insert(sql, clue):
         print(clue)
         return
     sql.execute(
-        "INSERT OR IGNORE INTO airdates VALUES(?, ?);",
-        (clue[0], clue[1], )
+        "INSERT OR IGNORE INTO games VALUES(?, ?, ?);",
+        (clue[0], clue[7], clue[1], )
     )
     sql.execute("INSERT OR IGNORE INTO categories(category) VALUES(?);", (clue[3], ))
     category_id = sql.execute("SELECT id FROM categories WHERE category=?;", (clue[3], )).fetchone()[0]
     clue_id = sql.execute("INSERT INTO documents(clue, answer) VALUES(?, ?);", (clue[5], clue[6], )).lastrowid
-    sql.execute("INSERT INTO clues(game, round, value) VALUES(?, ?, ?);", (clue[0], clue[2], clue[4], ))
+    sql.execute("INSERT INTO clues(game_id, round, value) VALUES(?, ?, ?);", (clue[0], clue[2], clue[4], ))
     sql.execute("INSERT INTO classifications VALUES(?, ?)", (clue_id, category_id, ))
 
 
