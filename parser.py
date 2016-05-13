@@ -31,7 +31,7 @@ def main(args):
             sql.execute("""PRAGMA foreign_keys = ON;""")
             sql.execute("""CREATE TABLE games(
                 id INTEGER PRIMARY KEY,
-                number INTEGER,
+                airnumber INTEGER,
                 airdate TEXT
             );""")
             sql.execute("""CREATE TABLE categories(
