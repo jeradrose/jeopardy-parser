@@ -73,7 +73,7 @@ def parse_game(f, sql, gid):
         params = parse_qs(url.query)
         if "player_id" in params:
             p_id = params["player_id"][0]
-        m = re.search("^, an? (.*?) (?:(originally) from|from) (.*?)(?: \(.*\))?$", p.contents[1])
+        m = re.search("^,(?: an?)? (.*?) (?:(originally) from|from) (.*?)(?: \(.*\))?$", p.contents[1])
         occupation = m.group(1)
         is_originally = m.group(2) != None
         location = m.group(3)
