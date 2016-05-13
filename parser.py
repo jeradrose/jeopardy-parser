@@ -26,44 +26,43 @@ def main(args):
         os.remove(args.database)
     except OSError:
         pass
-    if not args.stdout:
-        sql = sqlite3.connect(args.database)
-        sql.execute("""PRAGMA foreign_keys = ON;""")
-        sql.execute("""CREATE TABLE games(
-            id INTEGER PRIMARY KEY,
-            number INTEGER,
-            airdate TEXT
-        );""")
-        sql.execute("""CREATE TABLE documents(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            clue TEXT,
-            answer TEXT
-        );""")
-        sql.execute("""CREATE TABLE categories(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            category TEXT UNIQUE
-        );""")
-        sql.execute("""CREATE TABLE clues(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            game_id INTEGER,
-            round INTEGER,
-            value INTEGER,
-            FOREIGN KEY(id) REFERENCES documents(id),
-            FOREIGN KEY(game_id) REFERENCES games(id)
-        );""")
-        sql.execute("""CREATE TABLE classifications(
-            clue_id INTEGER,
-            category_id INTEGER,
-            FOREIGN KEY(clue_id) REFERENCES clues(id),
-            FOREIGN KEY(category_id) REFERENCES categories(id)
-        );""")
-    for i, file_name in enumerate(glob(os.path.join(args.dir, "*.html")), 1):
-        with open(os.path.abspath(file_name)) as f:
-            parse_game(f, sql, i)
-    if not args.stdout:
-        sql.commit()
-    print("All done")
-
+    with sqlite3.connect(args.database) as sql:
+        if not args.stdout:
+            sql.execute("""PRAGMA foreign_keys = ON;""")
+            sql.execute("""CREATE TABLE games(
+                id INTEGER PRIMARY KEY,
+                number INTEGER,
+                airdate TEXT
+            );""")
+            sql.execute("""CREATE TABLE documents(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                clue TEXT,
+                answer TEXT
+            );""")
+            sql.execute("""CREATE TABLE categories(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT UNIQUE
+            );""")
+            sql.execute("""CREATE TABLE clues(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER,
+                round INTEGER,
+                value INTEGER,
+                FOREIGN KEY(id) REFERENCES documents(id),
+                FOREIGN KEY(game_id) REFERENCES games(id)
+            );""")
+            sql.execute("""CREATE TABLE classifications(
+                clue_id INTEGER,
+                category_id INTEGER,
+                FOREIGN KEY(clue_id) REFERENCES clues(id),
+                FOREIGN KEY(category_id) REFERENCES categories(id)
+            );""")
+        for i, file_name in enumerate(glob(os.path.join(args.dir, "*.html")), 1):
+            with open(os.path.abspath(file_name)) as f:
+                parse_game(f, sql, i)
+        if not args.stdout:
+            sql.commit()
+        print("All done")
 
 def parse_game(f, sql, gid):
     """Parses an entire Jeopardy! game and extract individual clues."""
