@@ -22,6 +22,10 @@ def main(args):
         NUMBER_OF_FILES = args.num_of_files
     print("Parsing", NUMBER_OF_FILES, "files")
     sql = None
+    try:
+        os.remove(args.database)
+    except OSError:
+        pass
     if not args.stdout:
         sql = sqlite3.connect(args.database)
         sql.execute("""PRAGMA foreign_keys = ON;""")
