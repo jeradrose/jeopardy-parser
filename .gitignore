@@ -5,6 +5,6 @@
 *.bak
 *.py[co]
 
-j-archive
+j-archive*
 
 *.ipynb
