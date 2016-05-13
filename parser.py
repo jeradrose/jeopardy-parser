@@ -4,13 +4,14 @@
 from __future__ import with_statement
 from bs4 import BeautifulSoup
 from glob import glob
+from urllib.parse import urlparse
+from urllib.parse import parse_qs
 
 import argparse
 import os
 import re
 import sqlite3
 import sys
-
 
 def main(args):
     """Loop thru all the games and parse them."""
@@ -38,6 +39,13 @@ def main(args):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 category TEXT UNIQUE
             );""")
+            sql.execute("""CREATE TABLE players(
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                occupation TEXT,
+                location TEXT,
+                is_originally INTEGER
+            );""")
             sql.execute("""CREATE TABLE clues(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 game_id INTEGER,
@@ -59,6 +67,18 @@ def main(args):
 def parse_game(f, sql, gid):
     """Parses an entire Jeopardy! game and extract individual clues."""
     bsoup = BeautifulSoup(f, "lxml")
+    for p in bsoup.find_all("p", class_="contestants"):
+        name = p.find("a").get_text()
+        url = urlparse(p.find("a")["href"])
+        params = parse_qs(url.query)
+        if "player_id" in params:
+            p_id = params["player_id"][0]
+        m = re.search("^, an? (.*?) (?:(originally) from|from) (.*?)(?: \(.*\))?$", p.contents[1])
+        occupation = m.group(1)
+        is_originally = m.group(2) != None
+        location = m.group(3)
+        sql.execute("INSERT OR IGNORE INTO players(id, name, occupation, location, is_originally) VALUES(?, ?, ?, ?, ?);", (p_id, name, occupation, location, is_originally, ))
+        
     # The title is in the format: `J! Archive - Show #XXXX, aired 2004-09-16`,
     # where the last part is all that is required
     title_parts = bsoup.title.get_text().split()
@@ -133,7 +153,6 @@ def insert(sql, clue):
     sql.execute("INSERT OR IGNORE INTO categories(category) VALUES(?);", (clue[3], ))
     category_id = sql.execute("SELECT id FROM categories WHERE category=?;", (clue[3], )).fetchone()[0]
     sql.execute("INSERT INTO clues(game_id, round, value, category_id, clue, answer) VALUES(?, ?, ?, ?, ?, ?);", (clue[0], clue[2], clue[4], category_id, clue[5], clue[6], ))
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
