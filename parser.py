@@ -46,6 +46,16 @@ def main(args):
                 location TEXT,
                 is_originally INTEGER
             );""")
+            sql.execute("""CREATE TABLE game_players(
+                game_id INTEGER,
+                player_id INTEGER,
+                place INTEGER,
+                first_break_score INTEGER,
+                first_round_score INTEGER,
+                second_round_score INTEGER,
+                final_score INTEGER,
+                coryat_score INTEGER
+            );""")
             sql.execute("""CREATE TABLE clues(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 game_id INTEGER,
@@ -58,6 +68,7 @@ def main(args):
                 FOREIGN KEY(category_id) REFERENCES categories(id)
             );""")
         for i, file_name in enumerate(glob(os.path.join(args.dir, "*.html")), 1):
+            print(file_name)
             with open(os.path.abspath(file_name)) as f:
                 parse_game(f, sql, i)
         if not args.stdout:
@@ -67,7 +78,68 @@ def main(args):
 def parse_game(f, sql, gid):
     """Parses an entire Jeopardy! game and extract individual clues."""
     bsoup = BeautifulSoup(f, "lxml")
-    for p in bsoup.find_all("p", class_="contestants"):
+
+    scores_table_cb = bsoup.find("h3", text=re.compile("Scores at the first commercial break*.")).next_sibling.next_sibling
+
+    # Get all player nickames
+    player_nicknames = []
+    for i in range(3):
+        player_nicknames.append(scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text())
+
+    # Get all player names
+    player_names = []
+    for i in range(3):
+        player_names.append(bsoup.find_all("p", class_="contestants")[i].find("a").get_text())
+        
+    # Try to exact match player first names to nicknames
+    player_names_to_nicknames = {}
+    for i in reversed(range(3)):
+        nickname = player_names[i].split()[0]
+        if nickname in player_nicknames:
+            name = player_names[i]
+            player_names_to_nicknames[name] = nickname
+            player_names.remove(name)
+            player_nicknames.remove(nickname)
+
+    # Do hacky matching to figure out remaining name/nicknames string trying to match from beginning of string
+    for i in reversed(range(len(player_names))):
+        name = player_names[i]
+        for i in range(len(name)):
+            matching_nickname = ""
+            matches_found = 0
+            for nickname in player_nicknames:
+                if name[i:i+1] == nickname[i:i+1]:
+                    matching_nickname = nickname
+                    matches_found += 1
+            if matches_found == 1:
+                player_names_to_nicknames[name] = matching_nickname
+                player_names.remove(name)
+                player_nicknames.remove(matching_nickname)
+                break
+    
+    if len(player_names) > 0:
+        print("could not match all names to nicknames")
+        return
+
+    player_scores = {}
+    player_names = scores_table_cb.find_all("td", class_="score_player_nickname")
+
+    scores_table_j = bsoup.find("h3", text=re.compile("Scores at the end of the Jeopardy! Round:")).next_sibling.next_sibling
+    scores_table_dj = bsoup.find("h3", text=re.compile("Scores at the end of the Double Jeopardy! Round:")).next_sibling.next_sibling
+    scores_table_fs = bsoup.find("h3", text=re.compile("Final scores:")).next_sibling.next_sibling
+    scores_table_cs = bsoup.find("a", text="Coryat scores").parent.next_sibling.next_sibling
+    
+    for i in range(3):
+        player_scores[scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text()] = [
+            int(scores_table_cb.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
+            int(scores_table_j.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
+            int(scores_table_dj.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
+            int(scores_table_fs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
+            int(scores_table_cs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", ""))
+        ]
+
+    for i in range(3):
+        p = bsoup.find_all("p", class_="contestants")[i]
         name = p.find("a").get_text()
         url = urlparse(p.find("a")["href"])
         params = parse_qs(url.query)
@@ -77,7 +149,12 @@ def parse_game(f, sql, gid):
         occupation = m.group(1)
         is_originally = m.group(2) != None
         location = m.group(3)
+        nickname = name.split()[0]
+        scores = player_scores[player_names_to_nicknames[name]]
+
+        
         sql.execute("INSERT OR IGNORE INTO players(id, name, occupation, location, is_originally) VALUES(?, ?, ?, ?, ?);", (p_id, name, occupation, location, is_originally, ))
+        sql.execute("INSERT INTO game_players(game_id, player_id, place, first_break_score, first_round_score, second_round_score, final_score, coryat_score) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (gid, p_id, 0, scores[0], scores[1], scores[2], scores[3], scores[4]))
         
     # The title is in the format: `J! Archive - Show #XXXX, aired 2004-09-16`,
     # where the last part is all that is required
