@@ -54,7 +54,9 @@ def main(args):
                 first_round_score INTEGER,
                 second_round_score INTEGER,
                 final_score INTEGER,
-                coryat_score INTEGER
+                coryat_score INTEGER,
+                FOREIGN KEY(game_id) REFERENCES games(id),
+                FOREIGN KEY(player_id) REFERENCES players(id)
             );""")
             sql.execute("""CREATE TABLE clues(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,8 +66,10 @@ def main(args):
                 category_id INTEGER,
                 clue TEXT,
                 answer TEXT,
+                answer_player_id INTEGER,
                 FOREIGN KEY(game_id) REFERENCES games(id),
-                FOREIGN KEY(category_id) REFERENCES categories(id)
+                FOREIGN KEY(category_id) REFERENCES categories(id),
+                FOREIGN KEY(answer_player_id) REFERENCES players(id)
             );""")
         for i, file_name in enumerate(glob(os.path.join(args.dir, "*.html")), 1):
             print(file_name)
@@ -79,83 +83,6 @@ def parse_game(f, sql, gid):
     """Parses an entire Jeopardy! game and extract individual clues."""
     bsoup = BeautifulSoup(f, "lxml")
 
-    scores_table_cb = bsoup.find("h3", text=re.compile("Scores at the first commercial break*.")).next_sibling.next_sibling
-
-    # Get all player nickames
-    player_nicknames = []
-    for i in range(3):
-        player_nicknames.append(scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text())
-
-    # Get all player names
-    player_names = []
-    for i in range(3):
-        player_names.append(bsoup.find_all("p", class_="contestants")[i].find("a").get_text())
-        
-    # Try to exact match player first names to nicknames
-    player_names_to_nicknames = {}
-    for i in reversed(range(3)):
-        nickname = player_names[i].split()[0]
-        if nickname in player_nicknames:
-            name = player_names[i]
-            player_names_to_nicknames[name] = nickname
-            player_names.remove(name)
-            player_nicknames.remove(nickname)
-
-    # Do hacky matching to figure out remaining name/nicknames string trying to match from beginning of string
-    for i in reversed(range(len(player_names))):
-        name = player_names[i]
-        for i in range(len(name)):
-            matching_nickname = ""
-            matches_found = 0
-            for nickname in player_nicknames:
-                if name[i:i+1] == nickname[i:i+1]:
-                    matching_nickname = nickname
-                    matches_found += 1
-            if matches_found == 1:
-                player_names_to_nicknames[name] = matching_nickname
-                player_names.remove(name)
-                player_nicknames.remove(matching_nickname)
-                break
-    
-    if len(player_names) > 0:
-        print("could not match all names to nicknames")
-        return
-
-    player_scores = {}
-    player_names = scores_table_cb.find_all("td", class_="score_player_nickname")
-
-    scores_table_j = bsoup.find("h3", text=re.compile("Scores at the end of the Jeopardy! Round:")).next_sibling.next_sibling
-    scores_table_dj = bsoup.find("h3", text=re.compile("Scores at the end of the Double Jeopardy! Round:")).next_sibling.next_sibling
-    scores_table_fs = bsoup.find("h3", text=re.compile("Final scores:")).next_sibling.next_sibling
-    scores_table_cs = bsoup.find("a", text="Coryat scores").parent.next_sibling.next_sibling
-    
-    for i in range(3):
-        player_scores[scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text()] = [
-            int(scores_table_cb.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
-            int(scores_table_j.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
-            int(scores_table_dj.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
-            int(scores_table_fs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
-            int(scores_table_cs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", ""))
-        ]
-
-    for i in range(3):
-        p = bsoup.find_all("p", class_="contestants")[i]
-        name = p.find("a").get_text()
-        url = urlparse(p.find("a")["href"])
-        params = parse_qs(url.query)
-        if "player_id" in params:
-            p_id = params["player_id"][0]
-        m = re.search("^,(?: an?)? (.*?) (?:(originally) from|from) (.*?)(?: \(.*\))?$", p.contents[1])
-        occupation = m.group(1)
-        is_originally = m.group(2) != None
-        location = m.group(3)
-        nickname = name.split()[0]
-        scores = player_scores[player_names_to_nicknames[name]]
-
-        
-        sql.execute("INSERT OR IGNORE INTO players(id, name, occupation, location, is_originally) VALUES(?, ?, ?, ?, ?);", (p_id, name, occupation, location, is_originally, ))
-        sql.execute("INSERT INTO game_players(game_id, player_id, place, first_break_score, first_round_score, second_round_score, final_score, coryat_score) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (gid, p_id, 0, scores[0], scores[1], scores[2], scores[3], scores[4]))
-        
     # The title is in the format: `J! Archive - Show #XXXX, aired 2004-09-16`,
     # where the last part is all that is required
     title_parts = bsoup.title.get_text().split()
@@ -176,6 +103,111 @@ def parse_game(f, sql, gid):
     # False indicates no preset value for a clue
     insert(sql, [gid, airdate, 3, category, False, text, answer, game_number])
 
+    parse_players(bsoup, sql, gid)
+
+def parse_players(bsoup, sql, gid):
+    player_ids = {}    
+    
+    contestants = bsoup.find_all("p", class_="contestants")
+    if contestants:
+        for i in range(3):
+            p = contestants[i]
+            for match in p.findAll('i'):
+                match.unwrap()
+
+    contestants = bsoup.find_all("p", class_="contestants")
+    if contestants:
+        for i in range(3):
+            p = contestants[i]
+            name = p.find("a").get_text()
+            url = urlparse(p.find("a")["href"])
+            params = parse_qs(url.query)
+            if "player_id" in params:
+                p_id = params["player_id"][0]
+            m = re.search("^,(?: an?)? (.*?) (?:(originally) from|from) (.*?)(?: \(.*\))?$", ''.join(p.contents[1:]))
+            occupation = m.group(1)
+            is_originally = m.group(2) != None
+            location = m.group(3)
+            player_ids[name] = p_id
+            
+            sql.execute("INSERT OR IGNORE INTO players(id, name, occupation, location, is_originally) VALUES(?, ?, ?, ?, ?);", (p_id, name, occupation, location, is_originally, ))
+    
+    st_h3_cb = bsoup.find("h3", text=re.compile("Scores at the first commercial break*."))
+    st_h3_j = bsoup.find("h3", text=re.compile("Scores at the end of the Jeopardy! Round:"))
+    st_h3_dj = bsoup.find("h3", text=re.compile("Scores at the end of the Double Jeopardy! Round:"))
+    st_h3_fs = bsoup.find("h3", text=re.compile("Final scores:"))
+    
+    if bsoup.find("a", text="Coryat scores"):
+        st_h3_cs = bsoup.find("a", text="Coryat scores").parent
+
+    if (st_h3_cb and st_h3_j and st_h3_dj and st_h3_fs and st_h3_cs):
+        scores_table_cb = st_h3_cb.next_sibling.next_sibling
+        scores_table_j = st_h3_j.next_sibling.next_sibling
+        scores_table_dj = st_h3_dj.next_sibling.next_sibling
+        scores_table_fs = st_h3_fs.next_sibling.next_sibling
+        scores_table_cs = st_h3_cs.next_sibling.next_sibling
+        
+        # Get all player nickames
+        player_nicknames = []
+        for i in range(3):
+            player_nicknames.append(scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text())
+    
+        # Get all player names
+        player_names = []
+        for i in range(3):
+            player_names.append(bsoup.find_all("p", class_="contestants")[i].find("a").get_text())
+            
+        # Try to exact match player first names to nicknames
+        player_names_to_nicknames = {}
+        for i in reversed(range(3)):
+            nickname = player_names[i].split()[0]
+            if nickname in player_nicknames:
+                name = player_names[i]
+                player_names_to_nicknames[name] = nickname
+                player_names.remove(name)
+                player_nicknames.remove(nickname)
+
+        # If there's only one mismatch, match it up
+        if len(player_names) == 1 and len(player_nicknames) == 1:
+            player_names_to_nicknames[player_names[0]] = player_nicknames[0]
+            player_names.remove(player_names[0])
+            player_nicknames.remove(player_nicknames[0])
+
+        # Do hacky matching to figure out remaining name/nicknames string trying to match from beginning of string
+        for i in reversed(range(len(player_names))):
+            name = player_names[i]
+            for i in range(len(name)):
+                matching_nickname = ""
+                matches_found = 0
+                for nickname in player_nicknames:
+                    if name[i:i+1] == nickname[i:i+1]:
+                        matching_nickname = nickname
+                        matches_found += 1
+                if matches_found == 1:
+                    player_names_to_nicknames[name] = matching_nickname
+                    player_names.remove(name)
+                    player_nicknames.remove(matching_nickname)
+                    break
+        
+        if len(player_names) > 0:
+            print("could not match all names to nicknames")
+            return
+    
+        player_scores = {}
+    
+        for i in range(3):
+            player_scores[scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text()] = [
+                int(scores_table_cb.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
+                int(scores_table_j.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
+                int(scores_table_dj.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
+                int(scores_table_fs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
+                int(scores_table_cs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", ""))
+            ]
+            
+        for name, nickname in player_names_to_nicknames.items():
+            scores = player_scores[nickname]
+            p_id = player_ids[name]
+            sql.execute("INSERT INTO game_players(game_id, player_id, place, first_break_score, first_round_score, second_round_score, final_score, coryat_score) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (gid, p_id, 0, scores[0], scores[1], scores[2], scores[3], scores[4]))
 
 def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
     """Parses and inserts the list of clues from a whole round."""
