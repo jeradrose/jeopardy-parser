@@ -19,10 +19,10 @@ def main(args):
     if not os.path.isdir(args.dir):
         print("The specified folder is not a directory.")
         sys.exit(1)
-    NUMBER_OF_FILES = len(os.listdir(args.dir))
+    total_files = len(os.listdir(args.dir))
     if args.num_of_files:
-        NUMBER_OF_FILES = args.num_of_files
-    print("Parsing", NUMBER_OF_FILES, "files")
+        total_files = args.num_of_files
+    print("Parsing", total_files, "files")
     sql = None
     with sqlite3.connect(args.database) as sql:
         if not args.stdout:
@@ -58,6 +58,7 @@ def main(args):
                 second_round_score INTEGER,
                 final_score INTEGER,
                 coryat_score INTEGER,
+                PRIMARY KEY(game_id, player_id),
                 FOREIGN KEY(game_id) REFERENCES games(game_id),
                 FOREIGN KEY(player_id) REFERENCES players(player_id)
             );""")
@@ -75,7 +76,9 @@ def main(args):
                 FOREIGN KEY(category_id) REFERENCES categories(category_id),
                 FOREIGN KEY(answer_player_id) REFERENCES players(player_id)
             );""")
-        for i, file_name in enumerate(glob(os.path.join(args.dir, "*.html")), 1):
+        #for i, file_name in enumerate(glob(os.path.join(args.dir, "*.html")), 1):
+        for i in range(1, total_files+1):
+            file_name = str(i) + ".html"
             print(file_name)
             with open(os.path.abspath(file_name)) as f:
                 parse_game(f, sql, i)
