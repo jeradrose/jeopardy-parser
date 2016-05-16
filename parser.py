@@ -123,15 +123,18 @@ def parse_players(bsoup, sql, gid):
     player_ids = {}    
     
     contestants = bsoup.find_all("p", class_="contestants")
+    
+    total_players = len(contestants)
+    
     if contestants:
-        for i in range(3):
+        for i in range(total_players):
             p = contestants[i]
             for match in p.findAll('i'):
                 match.unwrap()
 
     contestants = bsoup.find_all("p", class_="contestants")
     if contestants:
-        for i in range(3):
+        for i in range(total_players):
             p = contestants[i]
             name = p.find("a").get_text()
             url = urlparse(p.find("a")["href"])
@@ -163,17 +166,17 @@ def parse_players(bsoup, sql, gid):
         
         # Get all player nickames
         player_nicknames = []
-        for i in range(3):
+        for i in range(total_players):
             player_nicknames.append(scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text())
     
         # Get all player names
         player_names = []
-        for i in range(3):
+        for i in range(total_players):
             player_names.append(bsoup.find_all("p", class_="contestants")[i].find("a").get_text())
             
         # Try to exact match player first names to nicknames
         player_nicknames_to_names = {}
-        for i in reversed(range(3)):
+        for i in reversed(range(total_players)):
             nickname = player_names[i].split()[0]
             if nickname in player_nicknames:
                 name = player_names[i]
@@ -209,7 +212,7 @@ def parse_players(bsoup, sql, gid):
     
         player_scores = []
     
-        for i in range(3):
+        for i in range(total_players):
             player_scores.append([
                 scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text(),
                 int(scores_table_cb.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
@@ -221,12 +224,12 @@ def parse_players(bsoup, sql, gid):
 
         player_final_scores = []
         
-        for i in range(3):
+        for i in range(total_players):
             player_final_scores.append(player_scores[i][4])
 
         player_ranks = len(player_final_scores) - rankdata(player_final_scores, method="min").astype(int) + 1
         
-        for i in range(3):
+        for i in range(total_players):
         #for name, nickname in player_names_to_nicknames.items():
             nickname = player_scores[i][0]
             name = player_nicknames_to_names[nickname]
