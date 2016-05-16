@@ -158,16 +158,14 @@ def parse_players(bsoup, sql, gid):
     st_h3_dj = bsoup.find("h3", text=re.compile("Scores at the end of the Double Jeopardy! Round:"))
     st_h3_fs = bsoup.find("h3", text=re.compile("Final scores:"))
     
-    if bsoup.find("a", text="Coryat scores"):
-        st_h3_cs = bsoup.find("a", text="Coryat scores").parent
-
-    if (st_h3_cb and st_h3_j and st_h3_dj and st_h3_fs and st_h3_cs):
-        scores_table_cb = st_h3_cb.next_sibling.next_sibling
-        scores_table_j = st_h3_j.next_sibling.next_sibling
-        scores_table_dj = st_h3_dj.next_sibling.next_sibling
-        scores_table_fs = st_h3_fs.next_sibling.next_sibling
-        scores_table_cs = st_h3_cs.next_sibling.next_sibling
+    scores_table_cb = st_h3_cb.next_sibling.next_sibling if (st_h3_cb) else None
+    scores_table_j = st_h3_j.next_sibling.next_sibling if (st_h3_j) else None
+    scores_table_dj = st_h3_dj.next_sibling.next_sibling if (st_h3_dj) else None
+    scores_table_fs = st_h3_fs.next_sibling.next_sibling if (st_h3_fs) else None
+    st_h3_cs = bsoup.find("a", text="Coryat scores").parent if bsoup.find("a", text="Coryat scores") else None
+    scores_table_cs = st_h3_cs.next_sibling.next_sibling if (st_h3_cs) else None
         
+    if (scores_table_cb):
         # Get all player nickames
         player_nicknames = []
         for i in range(total_players):
@@ -220,10 +218,10 @@ def parse_players(bsoup, sql, gid):
             player_scores.append([
                 scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text(),
                 int(scores_table_cb.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
-                int(scores_table_j.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
-                int(scores_table_dj.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
-                int(scores_table_fs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
-                int(scores_table_cs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", ""))
+                int(scores_table_j.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_j else None,
+                int(scores_table_dj.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_dj else None,
+                int(scores_table_fs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_fs else None,
+                int(scores_table_cs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_cs else None
             ])
 
         player_final_scores = []
