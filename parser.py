@@ -293,7 +293,7 @@ def insert(sql, clue):
     sql.execute("INSERT OR IGNORE INTO categories(category) VALUES(?);", (clue[3], ))
     category_id = sql.execute("SELECT category_id FROM categories WHERE category=?;", (clue[3], )).fetchone()[0]
     
-    right_player_id = sql.execute("SELECT players.player_id FROM players JOIN game_players ON game_players.player_id = players.player_id WHERE game_players.game_id=? AND players.nickname=?", (clue[0], clue[8])).fetchone()[0] if clue[8] else None
+    right_player_id = sql.execute("SELECT players.player_id FROM players JOIN game_players ON game_players.player_id = players.player_id WHERE game_players.game_id=? AND players.nickname=?", (clue[0], clue[8].replace("\\'", "'"))).fetchone()[0] if clue[8] else None
     sql.execute("INSERT INTO clues(game_id, round, value, category_id, clue, answer, answer_player_id, order_number) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (clue[0], clue[2], clue[4], category_id, clue[5], clue[6], right_player_id, clue[9] ))
 
 if __name__ == "__main__":
