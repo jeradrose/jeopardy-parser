@@ -249,7 +249,8 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
         is_missing = True if not a.get_text().strip() else False
         if not is_missing:
             value = a.find("td", class_=re.compile("clue_value")).get_text().lstrip("D: $")
-            order_number = a.find("td", class_=re.compile("clue_order_number")).find("a").get_text()
+            order_number_td = a.find("td", class_=re.compile("clue_order_number"))
+            order_number = order_number_td.find("a").get_text() if order_number_td.find("a") else order_number_td.get_text()
             text = a.find("td", class_="clue_text").get_text()
             answer = BeautifulSoup(a.find("div", onmouseover=True).get("onmouseover"), "lxml")
             right_player_td = answer.find("td", class_="right")
