@@ -34,7 +34,8 @@ def main(args):
             sql.execute("""CREATE TABLE games(
                 id INTEGER PRIMARY KEY,
                 airnumber INTEGER,
-                airdate TEXT
+                airdate TEXT,
+                notes TEXT
             );""")
             sql.execute("""CREATE TABLE categories(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,6 +67,7 @@ def main(args):
                 round INTEGER,
                 value INTEGER,
                 category_id INTEGER,
+                order_number INTEGER,
                 clue TEXT,
                 answer TEXT,
                 answer_player_id INTEGER,
@@ -90,6 +92,15 @@ def parse_game(f, sql, gid):
     title_parts = bsoup.title.get_text().split()
     airdate = title_parts[-1]
     game_number = title_parts[-3].replace("#", "").replace(",", "")
+    notes = bsoup.find("div", { "id": "game_comments" }).get_text()
+
+    sql.execute(
+        "INSERT OR IGNORE INTO games VALUES(?, ?, ?, ?);",
+        (gid, game_number, airdate, notes, )
+    )
+
+    parse_players(bsoup, sql, gid)
+
     if not parse_round(bsoup, sql, 1, gid, game_number, airdate) or not parse_round(bsoup, sql, 2, gid, game_number, airdate):
         # One of the rounds does not exist
         pass
@@ -103,9 +114,7 @@ def parse_game(f, sql, gid):
     answer = BeautifulSoup(r.find("div", onmouseover=True).get("onmouseover"), "lxml")
     answer = answer.find("em").get_text()
     # False indicates no preset value for a clue
-    insert(sql, [gid, airdate, 3, category, False, text, answer, game_number])
-
-    parse_players(bsoup, sql, gid)
+    insert(sql, [gid, airdate, 3, category, False, text, answer, game_number, None, None])
 
 def parse_players(bsoup, sql, gid):
     player_ids = {}    
@@ -240,10 +249,13 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
         is_missing = True if not a.get_text().strip() else False
         if not is_missing:
             value = a.find("td", class_=re.compile("clue_value")).get_text().lstrip("D: $")
+            order_number = a.find("td", class_=re.compile("clue_order_number")).find("a").get_text()
             text = a.find("td", class_="clue_text").get_text()
             answer = BeautifulSoup(a.find("div", onmouseover=True).get("onmouseover"), "lxml")
+            right_player_td = answer.find("td", class_="right")
+            right_player = right_player_td.get_text() if right_player_td else None
             answer = answer.find("em", class_="correct_response").get_text()
-            insert(sql, [gid, airdate, rnd, categories[x], value, text, answer, game_number])
+            insert(sql, [gid, airdate, rnd, categories[x], value, text, answer, game_number, right_player, order_number])
         # Always update x, even if we skip
         # a clue, as this keeps things in order. there
         # are 6 categories, so once we reach the end,
@@ -269,13 +281,11 @@ def insert(sql, clue):
     if not sql:
         print(clue)
         return
-    sql.execute(
-        "INSERT OR IGNORE INTO games VALUES(?, ?, ?);",
-        (clue[0], clue[7], clue[1], )
-    )
     sql.execute("INSERT OR IGNORE INTO categories(category) VALUES(?);", (clue[3], ))
     category_id = sql.execute("SELECT id FROM categories WHERE category=?;", (clue[3], )).fetchone()[0]
-    sql.execute("INSERT INTO clues(game_id, round, value, category_id, clue, answer) VALUES(?, ?, ?, ?, ?, ?);", (clue[0], clue[2], clue[4], category_id, clue[5], clue[6], ))
+    
+    right_player_id = sql.execute("SELECT players.id FROM players JOIN game_players ON game_players.player_id = players.id WHERE game_players.game_id=? AND players.nickname=?", (clue[0], clue[8])).fetchone()[0] if clue[8] else None
+    sql.execute("INSERT INTO clues(game_id, round, value, category_id, clue, answer, answer_player_id, order_number) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (clue[0], clue[2], clue[4], category_id, clue[5], clue[6], right_player_id, clue[9] ))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
