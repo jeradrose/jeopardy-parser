@@ -1,10 +1,12 @@
 #!/usr/bin/env python -OO
 # -*- coding: utf-8 -*-
 
+from urllib.request import urlopen
+from urllib.error import HTTPError
+
 import os
-import urllib2
 import time
-import futures as futures  # In Python 3 we can use "import concurrent.futures as futures"
+import concurrent.futures as futures
 
 current_working_directory = os.path.dirname(os.path.abspath(__file__))
 archive_folder = os.path.join(current_working_directory, "j-archive")
@@ -31,6 +33,14 @@ def create_archive_dir():
         print("Making %s" % archive_folder)
         os.mkdir(archive_folder)
 
+def download_pages_on_single_thread():
+    page = 1
+    while True:
+        f = download_and_save_page(page)
+        page += 1
+        # Block and stop if we're done downloading the page
+        if not f:
+            break
 
 def download_pages():
     page = 1
@@ -69,13 +79,13 @@ def download_page(page):
     url = 'http://j-archive.com/showgame.php?game_id=%s' % page
     html = None
     try:
-        response = urllib2.urlopen(url)
+        response = urlopen(url)
         if response.code == 200:
             print("Downloading %s" % url)
-            html = response.read()
+            html = response.read().decode(response.headers.get_content_charset())
         else:
             print("Invalid URL: %s" % url)
-    except urllib2.HTTPError:
+    except HTTPError:
         print("failed to open %s" % url)
     return html
 
