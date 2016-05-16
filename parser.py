@@ -76,12 +76,16 @@ def main(args):
                 FOREIGN KEY(category_id) REFERENCES categories(category_id),
                 FOREIGN KEY(answer_player_id) REFERENCES players(player_id)
             );""")
-        #for i, file_name in enumerate(glob(os.path.join(args.dir, "*.html")), 1):
-        for i in range(1, total_files+1):
-            file_name = str(i) + ".html"
-            print(file_name)
-            with open(os.path.abspath(file_name)) as f:
-                parse_game(f, sql, i)
+            
+        file_numbers = []
+        
+        for file_name in glob(os.path.join(args.dir, "*.html")):
+            file_numbers.append(int(file_name.replace(".html", "").replace(args.dir + "\\", "")))
+            
+        for file_number in sorted(file_numbers):
+            print(file_number)
+            with open(os.path.abspath(args.dir + "\\" + str(file_number) + ".html")) as f:
+                parse_game(f, sql, file_number)
         if not args.stdout:
             sql.commit()
         print("All done")
