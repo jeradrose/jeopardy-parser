@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from glob import glob
 from urllib.parse import urlparse
 from urllib.parse import parse_qs
+from scipy.stats import rankdata
 
 import argparse
 import os
@@ -158,18 +159,18 @@ def parse_players(bsoup, sql, gid):
             player_names.append(bsoup.find_all("p", class_="contestants")[i].find("a").get_text())
             
         # Try to exact match player first names to nicknames
-        player_names_to_nicknames = {}
+        player_nicknames_to_names = {}
         for i in reversed(range(3)):
             nickname = player_names[i].split()[0]
             if nickname in player_nicknames:
                 name = player_names[i]
-                player_names_to_nicknames[name] = nickname
+                player_nicknames_to_names[nickname] = name
                 player_names.remove(name)
                 player_nicknames.remove(nickname)
 
         # If there's only one mismatch, match it up
         if len(player_names) == 1 and len(player_nicknames) == 1:
-            player_names_to_nicknames[player_names[0]] = player_nicknames[0]
+            player_nicknames_to_names[player_names[0]] = player_nicknames[0]
             player_names.remove(player_names[0])
             player_nicknames.remove(player_nicknames[0])
 
@@ -184,7 +185,7 @@ def parse_players(bsoup, sql, gid):
                         matching_nickname = nickname
                         matches_found += 1
                 if matches_found == 1:
-                    player_names_to_nicknames[name] = matching_nickname
+                    player_nicknames_to_names[matching_nickname] = name
                     player_names.remove(name)
                     player_nicknames.remove(matching_nickname)
                     break
@@ -193,21 +194,31 @@ def parse_players(bsoup, sql, gid):
             print("could not match all names to nicknames")
             return
     
-        player_scores = {}
+        player_scores = []
     
         for i in range(3):
-            player_scores[scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text()] = [
+            player_scores.append([
+                scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text(),
                 int(scores_table_cb.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
                 int(scores_table_j.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
                 int(scores_table_dj.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
                 int(scores_table_fs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
                 int(scores_table_cs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", ""))
-            ]
-            
-        for name, nickname in player_names_to_nicknames.items():
-            scores = player_scores[nickname]
+            ])
+
+        player_final_scores = []
+        
+        for i in range(3):
+            player_final_scores.append(player_scores[i][4])
+
+        player_ranks = len(player_final_scores) - rankdata(player_final_scores, method="min").astype(int) + 1
+        
+        for i in range(3):
+        #for name, nickname in player_names_to_nicknames.items():
+            nickname = player_scores[i][0]
+            scores = player_scores[i]
             p_id = player_ids[name]
-            sql.execute("INSERT INTO game_players(game_id, player_id, place, first_break_score, first_round_score, second_round_score, final_score, coryat_score) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (gid, p_id, 0, scores[0], scores[1], scores[2], scores[3], scores[4]))
+            sql.execute("INSERT INTO game_players(game_id, player_id, place, first_break_score, first_round_score, second_round_score, final_score, coryat_score) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (gid, p_id, player_ranks.item(i), scores[0], scores[1], scores[2], scores[3], scores[4]))
 
 def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
     """Parses and inserts the list of clues from a whole round."""
