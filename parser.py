@@ -32,17 +32,17 @@ def main(args):
             sql.execute("""VACUUM;""")
             sql.execute("""PRAGMA foreign_keys = ON;""")
             sql.execute("""CREATE TABLE games(
-                id INTEGER PRIMARY KEY,
+                game_id INTEGER PRIMARY KEY,
                 airnumber INTEGER,
                 airdate TEXT,
                 notes TEXT
             );""")
             sql.execute("""CREATE TABLE categories(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 category TEXT UNIQUE
             );""")
             sql.execute("""CREATE TABLE players(
-                id INTEGER PRIMARY KEY,
+                player_id INTEGER PRIMARY KEY,
                 name TEXT,
                 nickname TEXT,
                 occupation TEXT,
@@ -58,11 +58,11 @@ def main(args):
                 second_round_score INTEGER,
                 final_score INTEGER,
                 coryat_score INTEGER,
-                FOREIGN KEY(game_id) REFERENCES games(id),
-                FOREIGN KEY(player_id) REFERENCES players(id)
+                FOREIGN KEY(game_id) REFERENCES games(game_id),
+                FOREIGN KEY(player_id) REFERENCES players(player_id)
             );""")
             sql.execute("""CREATE TABLE clues(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                clue_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 game_id INTEGER,
                 round INTEGER,
                 value INTEGER,
@@ -71,9 +71,9 @@ def main(args):
                 clue TEXT,
                 answer TEXT,
                 answer_player_id INTEGER,
-                FOREIGN KEY(game_id) REFERENCES games(id),
-                FOREIGN KEY(category_id) REFERENCES categories(id),
-                FOREIGN KEY(answer_player_id) REFERENCES players(id)
+                FOREIGN KEY(game_id) REFERENCES games(game_id),
+                FOREIGN KEY(category_id) REFERENCES categories(category_id),
+                FOREIGN KEY(answer_player_id) REFERENCES players(player_id)
             );""")
         for i, file_name in enumerate(glob(os.path.join(args.dir, "*.html")), 1):
             print(file_name)
@@ -141,7 +141,7 @@ def parse_players(bsoup, sql, gid):
             location = m.group(3)
             player_ids[name] = p_id
             
-            sql.execute("INSERT OR IGNORE INTO players(id, name, occupation, location, is_originally) VALUES(?, ?, ?, ?, ?);", (p_id, name, occupation, location, is_originally, ))
+            sql.execute("INSERT OR IGNORE INTO players(player_id, name, occupation, location, is_originally) VALUES(?, ?, ?, ?, ?);", (p_id, name, occupation, location, is_originally, ))
     
     st_h3_cb = bsoup.find("h3", text=re.compile("Scores at the first commercial break*."))
     st_h3_j = bsoup.find("h3", text=re.compile("Scores at the end of the Jeopardy! Round:"))
@@ -229,7 +229,7 @@ def parse_players(bsoup, sql, gid):
             name = player_nicknames_to_names[nickname]
             scores = player_scores[i]
             p_id = player_ids[name]
-            sql.execute("UPDATE players SET nickname = ? WHERE id = ?;", (nickname, p_id))
+            sql.execute("UPDATE players SET nickname = ? WHERE player_id = ?;", (nickname, p_id))
             sql.execute("INSERT INTO game_players(game_id, player_id, place, first_break_score, first_round_score, second_round_score, final_score, coryat_score) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (gid, p_id, player_ranks.item(i), scores[1], scores[2], scores[3], scores[4], scores[5]))
 
 def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
@@ -283,9 +283,9 @@ def insert(sql, clue):
         print(clue)
         return
     sql.execute("INSERT OR IGNORE INTO categories(category) VALUES(?);", (clue[3], ))
-    category_id = sql.execute("SELECT id FROM categories WHERE category=?;", (clue[3], )).fetchone()[0]
+    category_id = sql.execute("SELECT category_id FROM categories WHERE category=?;", (clue[3], )).fetchone()[0]
     
-    right_player_id = sql.execute("SELECT players.id FROM players JOIN game_players ON game_players.player_id = players.id WHERE game_players.game_id=? AND players.nickname=?", (clue[0], clue[8])).fetchone()[0] if clue[8] else None
+    right_player_id = sql.execute("SELECT players.player_id FROM players JOIN game_players ON game_players.player_id = players.player_id WHERE game_players.game_id=? AND players.nickname=?", (clue[0], clue[8])).fetchone()[0] if clue[8] else None
     sql.execute("INSERT INTO clues(game_id, round, value, category_id, clue, answer, answer_player_id, order_number) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (clue[0], clue[2], clue[4], category_id, clue[5], clue[6], right_player_id, clue[9] ))
 
 if __name__ == "__main__":
