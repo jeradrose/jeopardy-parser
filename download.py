@@ -1,7 +1,6 @@
 #!/usr/bin/env python -OO
 # -*- coding: utf-8 -*-
 
-import itertools
 import os
 import urllib2
 import time
@@ -16,20 +15,20 @@ try:
     import multiprocessing
     # Since it's a lot of IO let's double # of actual cores
     NUM_THREADS = multiprocessing.cpu_count() * 2
-    print 'Using {} threads'.format(NUM_THREADS)
+    print('Using {} threads'.format(NUM_THREADS))
 except (ImportError, NotImplementedError):
     pass
 
 
 def main():
     create_archive_dir()
-    print "Downloading game files"
+    print("Downloading game files")
     download_pages()
 
 
 def create_archive_dir():
     if not os.path.isdir(archive_folder):
-        print "Making %s" % archive_folder
+        print("Making %s" % archive_folder)
         os.mkdir(archive_folder)
 
 
@@ -56,13 +55,13 @@ def download_and_save_page(page):
         html = download_page(page)
         if ERROR_MSG in html:
             # Now we stop
-            print "Finished downloading. Now parse."
+            print("Finished downloading. Now parse.")
             return False
         elif html:
             save_file(html, destination_file_path)
             time.sleep(SECONDS_BETWEEN_REQUESTS)  # Remember to be kind to the server
     else:
-        print "Already downloaded %s" % destination_file_path
+        print("Already downloaded %s" % destination_file_path)
     return True
 
 
@@ -72,12 +71,12 @@ def download_page(page):
     try:
         response = urllib2.urlopen(url)
         if response.code == 200:
-            print "Downloading %s" % url
+            print("Downloading %s" % url)
             html = response.read()
         else:
-            print "Invalid URL: %s" % url
+            print("Invalid URL: %s" % url)
     except urllib2.HTTPError:
-        print "failed to open %s" % url
+        print("failed to open %s" % url)
     return html
 
 
@@ -86,7 +85,7 @@ def save_file(html, filename):
         with open(filename, 'w') as f:
             f.write(html)
     except IOError:
-        print "Couldn't write to file %s" % filename
+        print("Couldn't write to file %s" % filename)
 
 
 if __name__ == "__main__":
