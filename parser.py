@@ -152,6 +152,7 @@ def parse_players(bsoup, sql, gid):
             player_ids[name] = p_id
             
             sql.execute("INSERT OR IGNORE INTO players(player_id, name, occupation, location, is_originally) VALUES(?, ?, ?, ?, ?);", (p_id, name, occupation, location, is_originally, ))
+            sql.execute("INSERT OR IGNORE INTO game_players(game_id, player_id) VALUES(?, ?)", (gid, p_id))
     
     st_h3_cb = bsoup.find("h3", text=re.compile("Scores at the first commercial break*."))
     st_h3_j = bsoup.find("h3", text=re.compile("Scores at the end of the Jeopardy! Round:"))
@@ -238,7 +239,7 @@ def parse_players(bsoup, sql, gid):
             scores = player_scores[i]
             p_id = player_ids[name]
             sql.execute("UPDATE players SET nickname = ? WHERE player_id = ?;", (nickname, p_id))
-            sql.execute("INSERT INTO game_players(game_id, player_id, place, first_break_score, first_round_score, second_round_score, final_score, coryat_score) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (gid, p_id, player_ranks.item(i), scores[1], scores[2], scores[3], scores[4], scores[5]))
+            sql.execute("UPDATE game_players SET place = ?, first_break_score = ?, first_round_score = ?, second_round_score = ?, final_score = ?, coryat_score = ? WHERE game_id = ? AND player_id = ?;", (player_ranks.item(i), scores[1], scores[2], scores[3], scores[4], scores[5], gid, p_id))
 
 def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
     """Parses and inserts the list of clues from a whole round."""
