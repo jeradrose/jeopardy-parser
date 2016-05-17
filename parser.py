@@ -101,6 +101,7 @@ def parse_game(f, sql, gid):
     airdate = title_parts[-1]
     game_number = title_parts[-3].replace("#", "").replace(",", "")
     notes = bsoup.find("div", { "id": "game_comments" }).get_text()
+    notes = None if notes == "" else notes
 
     sql.execute(
         "INSERT OR IGNORE INTO games VALUES(?, ?, ?, ?, ?);",
