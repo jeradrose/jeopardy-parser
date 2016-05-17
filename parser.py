@@ -14,7 +14,7 @@ import re
 import sqlite3
 import sys
 
-def main(args):
+def main(args): 
     """Loop thru all the games and parse them."""
     if not os.path.isdir(args.dir):
         print("The specified folder is not a directory.")
@@ -77,6 +77,14 @@ def main(args):
                 FOREIGN KEY(category_id) REFERENCES categories(category_id),
                 FOREIGN KEY(answer_player_id) REFERENCES players(player_id)
             );""")
+            sql.execute("""CREATE TABLE clue_wrong_answers(
+                clue_id INTEGER,
+                player_id INTEGER,
+                answer TEXT,
+                PRIMARY KEY(clue_id, player_id),
+                FOREIGN KEY(clue_id) REFERENCES clues(clue_id),
+                FOREIGN KEY(player_id) REFERENCES players(player_id)
+            )""")
             
         file_numbers = []
         
@@ -200,7 +208,7 @@ def parse_players(bsoup, sql, gid):
                 matching_nickname = ""
                 matches_found = 0
                 for nickname in player_nicknames:
-                    if name[i:i+1] == nickname[i:i+1]:
+                    if name[:i+1] == nickname[:i+1]:
                         matching_nickname = nickname
                         matches_found += 1
                 if matches_found == 1:
@@ -265,9 +273,56 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
             text = a.find("td", class_="clue_text").get_text()
             answer = BeautifulSoup(a.find("div", onmouseover=True).get("onmouseover"), "lxml")
             right_player_td = answer.find("td", class_="right")
+            wrong_player_tds = answer.find_all("td", class_="wrong")
+            wrong_answers = []
+            
+            for wrong_player_td in wrong_player_tds:
+                wrong_player_nickname = wrong_player_td.get_text().replace("\\'", "'")
+                if wrong_player_nickname == "Triple Stumper" or wrong_player_nickname == "Quadruple Stumper":
+                    wrong_player_tds.remove(wrong_player_td)
+
+            answer_table = re.findall("'.*?'[,)]", str(answer).replace("\\'", "'"))[2]
+            r = re.compile("(\((.*?)\: (.*?)\)\s*\<br\/\>)")
+            wrong_answer_text_matches = r.findall(str(answer_table))
+
+            if len(wrong_player_tds) == 1:
+                wrong_player_nickname = wrong_player_tds[0].get_text().replace("\\'", "'")
+                wrong_answer_text = wrong_answer_text_matches[0][2] if len(wrong_answer_text_matches) > 0 else None
+                wrong_answers.append([wrong_player_nickname, wrong_answer_text, ])
+            elif len(wrong_player_tds) > 1:
+                # Another hacky char-by-char match on wrong answers due to dirty data
+                for match in wrong_answer_text_matches:
+                    name = match[1]
+                    if name == "Alex":
+                        found_match = False
+                        for td in wrong_player_tds:
+                            if name == td.get_text():
+                                found_match = True
+                        if not found_match:
+                            continue
+                    for i in range(len(name)):
+                        matches_found = 0
+                        for td in wrong_player_tds:
+                            nickname = td.get_text().replace("\\'", "'")
+                            if name[:i+1] == nickname[:i+1]:
+                                wrong_player_nickname = nickname
+                                wrong_answer_text = match[2]
+                                matches_found += 1
+                        if matches_found == 1:
+                            break
+                    if matches_found == 1:
+                        wrong_answers.append([wrong_player_nickname, wrong_answer_text, ])
+                
             right_player = right_player_td.get_text() if right_player_td else None
             answer = answer.find("em", class_="correct_response").get_text()
-            insert(sql, [gid, airdate, rnd, categories[x], value, text, answer, game_number, right_player, order_number])
+            clue_id = insert(sql, [gid, airdate, rnd, categories[x], value, text, answer, game_number, right_player, order_number])
+            
+            for wrong_answer in wrong_answers:
+                #print(str(gid) + ', ' + wrong_answer[0])
+                p_id = sql.execute("SELECT players.player_id FROM players JOIN game_players ON players.player_id = game_players.player_id AND game_players.game_id = ? WHERE (players.nickname = ? OR players.name = ?)", (gid, wrong_answer[0], wrong_answer[0], )).fetchone()[0]
+                #print("INSERT INTO clue_wrong_answers VALUES(" + str(clue_id) + ", " + str(p_id) + ", " + str(wrong_answer[1]) + ")")
+                sql.execute("INSERT OR IGNORE INTO clue_wrong_answers VALUES(?, ?, ?)", (clue_id, p_id, wrong_answer[1], ))
+
         # Always update x, even if we skip
         # a clue, as this keeps things in order. there
         # are 6 categories, so once we reach the end,
@@ -297,7 +352,9 @@ def insert(sql, clue):
     category_id = sql.execute("SELECT category_id FROM categories WHERE category=?;", (clue[3], )).fetchone()[0]
     
     right_player_id = sql.execute("SELECT players.player_id FROM players JOIN game_players ON game_players.player_id = players.player_id WHERE game_players.game_id=? AND players.nickname=?", (clue[0], clue[8].replace("\\'", "'"))).fetchone()[0] if clue[8] else None
-    sql.execute("INSERT INTO clues(game_id, round, value, category_id, clue, answer, answer_player_id, order_number) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (clue[0], clue[2], clue[4], category_id, clue[5], clue[6], right_player_id, clue[9] ))
+    clue_id = sql.execute("INSERT INTO clues(game_id, round, value, category_id, clue, answer, answer_player_id, order_number) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (clue[0], clue[2], clue[4], category_id, clue[5], clue[6], right_player_id, clue[9] )).lastrowid
+    
+    return clue_id
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
