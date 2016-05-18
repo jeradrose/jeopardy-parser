@@ -294,7 +294,7 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
                 if len(split) > 0 and len(split[0]) > 1:
                     wrong_answer_texts.append([split[0][0], split[0][1]])
                 else:
-                    print(match.group(1))
+                    wrong_answer_texts.append(["(no name)", match.group(1)])
 
             if len(wrong_player_tds) == 1:
                 wrong_player_nickname = wrong_player_tds[0].get_text().replace("\\'", "'")
