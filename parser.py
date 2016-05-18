@@ -33,8 +33,8 @@ def main(args):
             sql.execute("""PRAGMA foreign_keys = ON;""")
             sql.execute("""CREATE TABLE games(
                 game_id INTEGER PRIMARY KEY,
-                airnumber INTEGER,
-                airdate TEXT,
+                air_number INTEGER,
+                air_date TEXT,
                 game_data_complete INTEGER,
                 notes TEXT
             );""")
@@ -119,17 +119,17 @@ def parse_game(f, sql, gid):
     # The title is in the format: `J! Archive - Show #XXXX, aired 2004-09-16`,
     # where the last part is all that is required
     title_parts = bsoup.title.get_text().split()
-    airdate = title_parts[-1]
+    air_date = title_parts[-1]
     game_number = title_parts[-3].replace("#", "").replace(",", "")
     notes = bsoup.find("div", { "id": "game_comments" }).get_text()
     notes = None if notes == "" else notes
 
     sql.execute(
         "INSERT OR IGNORE INTO games VALUES(?, ?, ?, ?, ?);",
-        (gid, game_number, airdate, 0, notes, )
+        (gid, game_number, air_date, 0, notes, )
     )
     player_data_complete = parse_players(bsoup, sql, gid)
-    round_data_complete = parse_round(bsoup, sql, 1, gid, game_number, airdate) and parse_round(bsoup, sql, 2, gid, game_number, airdate)
+    round_data_complete = parse_round(bsoup, sql, 1, gid, game_number, air_date) and parse_round(bsoup, sql, 2, gid, game_number, air_date)
     r = bsoup.find("table", class_="final_round")
     if not r:
         # This game does not have a final clue
@@ -138,8 +138,7 @@ def parse_game(f, sql, gid):
     text = r.find("td", class_="clue_text").get_text()
     answer = BeautifulSoup(r.find("div", onmouseover=True).get("onmouseover"), "lxml")
     answer = answer.find("em").get_text()
-    # False indicates no preset value for a clue
-    clue_id = insert(sql, [gid, airdate, 3, category, False, text, answer, game_number, None, None, 0, None, None])
+    clue_id = insert(sql, [gid, air_date, 3, category, None, text, answer, game_number, None, None, 0, None, None])
     
     final_round_answers = BeautifulSoup(r.find("div", onmouseover=True).get("onmouseover"), "lxml")
     fr_trs = final_round_answers.findAll("tr")
@@ -280,7 +279,7 @@ def parse_players(bsoup, sql, gid):
 
         return len(contestants) >= 3 and scores_table_cb and scores_table_j and scores_table_dj and scores_table_fs and scores_table_cs
 
-def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
+def parse_round(bsoup, sql, rnd, gid, game_number, air_date):
     """Parses and inserts the list of clues from a whole round."""
     round_id = "jeopardy_round" if rnd == 1 else "double_jeopardy_round"
     r = bsoup.find(id=round_id)
@@ -363,7 +362,7 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
                 
             right_player = right_player_td.get_text() if right_player_td else None
             answer = answer.find("em", class_="correct_response").get_text()
-            clue_id = insert(sql, [gid, airdate, rnd, categories[column], value, text, answer, game_number, right_player, order_number, is_dd, column+1, row+1])
+            clue_id = insert(sql, [gid, air_date, rnd, categories[column], value, text, answer, game_number, right_player, order_number, is_dd, column+1, row+1])
             
             for wrong_answer in wrong_answers:
                 #print(str(gid) + ', ' + wrong_answer[0])
@@ -391,7 +390,7 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
 
 def insert(sql, clue):
     """Inserts the given clue into the database."""
-    # Clue is [game, airdate, round, category, value, clue, answer]
+    # Clue is [game, air_date, round, category, value, clue, answer]
     # Note that at this point, clue[4] is False if round is 3
     if "\\\'" in clue[6]:
         clue[6] = clue[6].replace("\\\'", "'")
