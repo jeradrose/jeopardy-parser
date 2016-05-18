@@ -421,7 +421,7 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--filename", dest="database",
                         metavar="<filename>",
                         help="the filename for the SQLite database",
-                        default="clues.db")
+                        default="output/database.db")
     parser.add_argument("--stdout",
                         help="output the clues to stdout and not a database",
                         action="store_true")
