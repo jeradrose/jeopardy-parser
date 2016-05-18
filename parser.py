@@ -10,7 +10,7 @@ from scipy.stats import rankdata
 
 import argparse
 import os
-import re
+import regex
 import sqlite3
 import sys
 
@@ -153,7 +153,7 @@ def parse_players(bsoup, sql, gid):
             params = parse_qs(url.query)
             if "player_id" in params:
                 p_id = params["player_id"][0]
-            m = re.search("^,(?: an?)? (.*?) (?:(originally) from|from) (.*?)(?: \(.*\))?$", ''.join(p.contents[1:]))
+            m = regex.search("^,(?: an?)? (.*?) (?:(originally) from|from) (.*?)(?: \(.*\))?$", ''.join(p.contents[1:]))
             occupation = m.group(1)
             is_originally = m.group(2) != None
             location = m.group(3)
@@ -162,10 +162,10 @@ def parse_players(bsoup, sql, gid):
             sql.execute("INSERT OR IGNORE INTO players(player_id, name, occupation, location, is_originally) VALUES(?, ?, ?, ?, ?);", (p_id, name, occupation, location, is_originally, ))
             sql.execute("INSERT OR IGNORE INTO game_players(game_id, player_id) VALUES(?, ?)", (gid, p_id,))
     
-    st_h3_cb = bsoup.find("h3", text=re.compile("Scores at the first commercial break*."))
-    st_h3_j = bsoup.find("h3", text=re.compile("Scores at the end of the Jeopardy! Round:"))
-    st_h3_dj = bsoup.find("h3", text=re.compile("Scores at the end of the Double Jeopardy! Round:"))
-    st_h3_fs = bsoup.find("h3", text=re.compile("Final scores:"))
+    st_h3_cb = bsoup.find("h3", text=regex.compile("Scores at the first commercial break*."))
+    st_h3_j = bsoup.find("h3", text=regex.compile("Scores at the end of the Jeopardy! Round:"))
+    st_h3_dj = bsoup.find("h3", text=regex.compile("Scores at the end of the Double Jeopardy! Round:"))
+    st_h3_fs = bsoup.find("h3", text=regex.compile("Final scores:"))
     
     scores_table_cb = st_h3_cb.next_sibling.next_sibling if (st_h3_cb) else None
     scores_table_j = st_h3_j.next_sibling.next_sibling if (st_h3_j) else None
@@ -226,11 +226,11 @@ def parse_players(bsoup, sql, gid):
         for i in range(total_players):
             player_scores.append([
                 scores_table_cb.find_all("td", class_="score_player_nickname")[i].get_text(),
-                int(scores_table_cb.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
-                int(scores_table_j.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_j else None,
-                int(scores_table_dj.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_dj else None,
-                int(scores_table_fs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_fs else None,
-                int(scores_table_cs.find_all("td", class_=re.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_cs else None
+                int(scores_table_cb.find_all("td", class_=regex.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")),
+                int(scores_table_j.find_all("td", class_=regex.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_j else None,
+                int(scores_table_dj.find_all("td", class_=regex.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_dj else None,
+                int(scores_table_fs.find_all("td", class_=regex.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_fs else None,
+                int(scores_table_cs.find_all("td", class_=regex.compile("score_(positive|negative)"))[i].get_text().replace("$", "").replace(",", "")) if scores_table_cs else None
             ])
 
         player_final_scores = []
@@ -267,8 +267,8 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
     for a in r.find_all("td", class_="clue"):
         is_missing = True if not a.get_text().strip() else False
         if not is_missing:
-            value = a.find("td", class_=re.compile("clue_value")).get_text().lstrip("D: $")
-            order_number_td = a.find("td", class_=re.compile("clue_order_number"))
+            value = a.find("td", class_=regex.compile("clue_value")).get_text().lstrip("D: $")
+            order_number_td = a.find("td", class_=regex.compile("clue_order_number"))
             order_number = order_number_td.find("a").get_text() if order_number_td.find("a") else order_number_td.get_text()
             text = a.find("td", class_="clue_text").get_text()
             answer = BeautifulSoup(a.find("div", onmouseover=True).get("onmouseover"), "lxml")
@@ -276,23 +276,34 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
             wrong_player_tds = answer.find_all("td", class_="wrong")
             wrong_answers = []
             
+            #print(text)
+            
             for wrong_player_td in wrong_player_tds:
                 wrong_player_nickname = wrong_player_td.get_text().replace("\\'", "'")
                 if wrong_player_nickname == "Triple Stumper" or wrong_player_nickname == "Quadruple Stumper":
                     wrong_player_tds.remove(wrong_player_td)
 
-            answer_table = re.findall("'.*?'[,)]", str(answer).replace("\\'", "'"))[2]
-            r = re.compile("(\((.*?)\: (.*?)\)\s*\<br\/\>)")
-            wrong_answer_text_matches = r.findall(str(answer_table))
+            answer_table = regex.findall(".*'(.*?)(?=\<em)", str(answer).replace("\\'", "'"))
+            answer_table_text = str(answer_table[0])
+            wrong_answer_text_matches = regex.finditer("\((([^()]|(?R))*)\)", answer_table_text)
+            
+            wrong_answer_texts = []
+            
+            for match in wrong_answer_text_matches:
+                split = regex.findall("(.*?)[:;,] (.*)", match.group(1))
+                if len(split) > 0 and len(split[0]) > 1:
+                    wrong_answer_texts.append([split[0][0], split[0][1]])
+                else:
+                    print(match.group(1))
 
             if len(wrong_player_tds) == 1:
                 wrong_player_nickname = wrong_player_tds[0].get_text().replace("\\'", "'")
-                wrong_answer_text = wrong_answer_text_matches[0][2] if len(wrong_answer_text_matches) > 0 else None
+                wrong_answer_text = wrong_answer_texts[0][1] if len(wrong_answer_texts) > 0 else None
                 wrong_answers.append([wrong_player_nickname, wrong_answer_text, ])
             elif len(wrong_player_tds) > 1:
                 # Another hacky char-by-char match on wrong answers due to dirty data
-                for match in wrong_answer_text_matches:
-                    name = match[1]
+                for match in wrong_answer_texts:
+                    name = match[0]
                     if name == "Alex":
                         found_match = False
                         for td in wrong_player_tds:
@@ -306,7 +317,7 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
                             nickname = td.get_text().replace("\\'", "'")
                             if name[:i+1] == nickname[:i+1]:
                                 wrong_player_nickname = nickname
-                                wrong_answer_text = match[2]
+                                wrong_answer_text = match[1]
                                 matches_found += 1
                         if matches_found == 1:
                             break
