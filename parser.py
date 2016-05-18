@@ -290,7 +290,7 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
             wrong_answer_texts = []
             
             for match in wrong_answer_text_matches:
-                split = regex.findall("(.*?)[:;,] (.*)", match.group(1))
+                split = regex.findall("(.*?) ?[:;,-]+ ?(.*)", match.group(1))
                 if len(split) > 0 and len(split[0]) > 1:
                     wrong_answer_texts.append([split[0][0], split[0][1]])
                 else:
