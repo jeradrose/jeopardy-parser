@@ -88,6 +88,16 @@ def main(args):
                 FOREIGN KEY(clue_id) REFERENCES clues(clue_id),
                 FOREIGN KEY(player_id) REFERENCES players(player_id)
             )""")
+            sql.execute("""CREATE TABLE final_jeopardy_answers(
+                clue_id INTEGER,
+                player_id INTEGER,
+                answer TEXT,
+                wager INTEGER,
+                is_correct INTEGER,
+                PRIMARY KEY(clue_id, player_id),
+                FOREIGN KEY(clue_id) REFERENCES clues(clue_id),
+                FOREIGN KEY(player_id) REFERENCES players(player_id)
+            )""")
             
         file_numbers = []
         
@@ -129,7 +139,23 @@ def parse_game(f, sql, gid):
     answer = BeautifulSoup(r.find("div", onmouseover=True).get("onmouseover"), "lxml")
     answer = answer.find("em").get_text()
     # False indicates no preset value for a clue
-    insert(sql, [gid, airdate, 3, category, False, text, answer, game_number, None, None, 0, None, None])
+    clue_id = insert(sql, [gid, airdate, 3, category, False, text, answer, game_number, None, None, 0, None, None])
+    
+    final_round_answers = BeautifulSoup(r.find("div", onmouseover=True).get("onmouseover"), "lxml")
+    fr_trs = final_round_answers.findAll("tr")
+    
+    for i in range(int(len(fr_trs) / 2)):
+        first_tr = fr_trs[(i*2)]
+        second_tr = fr_trs[(i*2)+1]
+        first_tr_tds = first_tr.findAll("td")
+        
+        name = first_tr_tds[0].get_text().replace("\\'", "'")
+        answer = first_tr_tds[1].get_text()
+        wager = second_tr.find("td").get_text().replace("$", "").replace(",", "")
+        is_correct = 1 if first_tr.find("td", class_="right") else 0
+        
+        p_id = sql.execute("SELECT players.player_id FROM players JOIN game_players ON players.player_id = game_players.player_id AND game_players.game_id = ? WHERE (players.nickname = ? OR players.name = ?)", (gid, name, name, )).fetchone()[0]
+        sql.execute("INSERT INTO final_jeopardy_answers(clue_id, player_id, answer, wager, is_correct) VALUES(?, ?, ?, ?, ?)", (clue_id, p_id, answer, wager, is_correct))
     
     if player_data_complete and round_data_complete:
         sql.execute("UPDATE games SET game_data_complete = 1 WHERE game_id = ?", (gid,))
