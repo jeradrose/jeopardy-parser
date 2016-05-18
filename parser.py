@@ -283,8 +283,8 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
                 if wrong_player_nickname == "Triple Stumper" or wrong_player_nickname == "Quadruple Stumper":
                     wrong_player_tds.remove(wrong_player_td)
 
-            answer_table = regex.findall(".*'(.*?)(?=\<em)", str(answer).replace("\\'", "'"))
-            answer_table_text = str(answer_table[0])
+            answer_table = regex.findall(".*'(\(.*?)(?=\<em)", str(answer).replace("\\'", "'"))
+            answer_table_text = str(answer_table[0]) if len(answer_table) > 0 else ""
             wrong_answer_text_matches = regex.finditer("\((([^()]|(?R))*)\)", answer_table_text)
             
             wrong_answer_texts = []
