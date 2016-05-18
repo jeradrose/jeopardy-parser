@@ -68,6 +68,7 @@ def main(args):
                 game_id INTEGER,
                 round INTEGER,
                 value INTEGER,
+                is_daily_double INTEGER,
                 category_id INTEGER,
                 order_number INTEGER,
                 clue TEXT,
@@ -126,7 +127,7 @@ def parse_game(f, sql, gid):
     answer = BeautifulSoup(r.find("div", onmouseover=True).get("onmouseover"), "lxml")
     answer = answer.find("em").get_text()
     # False indicates no preset value for a clue
-    insert(sql, [gid, airdate, 3, category, False, text, answer, game_number, None, None])
+    insert(sql, [gid, airdate, 3, category, False, text, answer, game_number, None, None, 0])
     
     if player_data_complete and round_data_complete:
         sql.execute("UPDATE games SET game_data_complete = 1 WHERE game_id = ?", (gid,))
@@ -267,7 +268,8 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
     for a in r.find_all("td", class_="clue"):
         is_missing = True if not a.get_text().strip() else False
         if not is_missing:
-            value = a.find("td", class_=regex.compile("clue_value")).get_text().lstrip("D: $")
+            value = a.find("td", class_=regex.compile("clue_value")).get_text().lstrip("D: $").replace(",", "")
+            is_dd = 1 if not not a.find("td", class_="clue_value_daily_double") else 0
             order_number_td = a.find("td", class_=regex.compile("clue_order_number"))
             order_number = order_number_td.find("a").get_text() if order_number_td.find("a") else order_number_td.get_text()
             text = a.find("td", class_="clue_text").get_text()
@@ -326,7 +328,7 @@ def parse_round(bsoup, sql, rnd, gid, game_number, airdate):
                 
             right_player = right_player_td.get_text() if right_player_td else None
             answer = answer.find("em", class_="correct_response").get_text()
-            clue_id = insert(sql, [gid, airdate, rnd, categories[x], value, text, answer, game_number, right_player, order_number])
+            clue_id = insert(sql, [gid, airdate, rnd, categories[x], value, text, answer, game_number, right_player, order_number, is_dd])
             
             for wrong_answer in wrong_answers:
                 #print(str(gid) + ', ' + wrong_answer[0])
@@ -363,7 +365,7 @@ def insert(sql, clue):
     category_id = sql.execute("SELECT category_id FROM categories WHERE category=?;", (clue[3], )).fetchone()[0]
     
     right_player_id = sql.execute("SELECT players.player_id FROM players JOIN game_players ON game_players.player_id = players.player_id WHERE game_players.game_id=? AND players.nickname=?", (clue[0], clue[8].replace("\\'", "'"))).fetchone()[0] if clue[8] else None
-    clue_id = sql.execute("INSERT INTO clues(game_id, round, value, category_id, clue, answer, answer_player_id, order_number) VALUES(?, ?, ?, ?, ?, ?, ?, ?);", (clue[0], clue[2], clue[4], category_id, clue[5], clue[6], right_player_id, clue[9] )).lastrowid
+    clue_id = sql.execute("INSERT INTO clues(game_id, round, value, category_id, clue, answer, answer_player_id, order_number, is_daily_double) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);", (clue[0], clue[2], clue[4], category_id, clue[5], clue[6], right_player_id, clue[9], clue[10], )).lastrowid
     
     return clue_id
 
